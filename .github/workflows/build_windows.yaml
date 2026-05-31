@@ -1,0 +1,35 @@
+name: Build Windows App
+
+# Isto permite-lhe ir ao GitHub e clicar num botão para iniciar a compilação
+on:
+  workflow_dispatch: 
+
+jobs:
+  build-windows:
+    # O GitHub vai alugar um PC com Windows de forma gratuita
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout do código
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 3. Instalar dependências
+        run: npm install
+
+      - name: 4. Configurar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 5. Compilar a App Tauri para Windows
+        run: npm run tauri build
+
+      - name: 6. Guardar e Disponibilizar o .exe / .msi
+        uses: actions/upload-artifact@v4
+        with:
+          name: GestorVinhos-Windows
+          # O Tauri guarda os instaladores finais dentro da pasta bundle
+          path: src-tauri/target/release/bundle/

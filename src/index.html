@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>App Carta de Vinhos</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind e Vue -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'gothic': ['CloisterBlack', 'UnifrakturMaguntia', 'cursive'],
+                        'header': ['Oswald', 'sans-serif'],
+                        'sans': ['ui-sans-serif', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Carregar a fonte local da pasta. Se não existir, usa a UnifrakturMaguntia via internet */
+        @font-face {
+            font-family: 'CloisterBlack';
+            src: local('CloisterBlack'), url('./CloisterBlack.ttf') format('truetype');
+            font-display: swap;
+        }
+
+        body { background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .preview-wrapper {
+            overflow-x: auto;
+            padding: 1rem;
+            background: #9ca3af;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            min-height: 100vh;
+        }
+
+        .a4-canvas {
+            width: 210mm;
+            min-height: 297mm;
+            background-color: #ffffff;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            padding: 5mm 8mm 8mm 8mm; 
+            position: relative;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .menu-item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.4rem;
+            padding: 0 0.1rem;
+            gap: 0.5rem;
+        }
+
+        .item-name { font-size: 0.95rem; font-weight: 500; color: #222; flex: 1; line-height: 1.2; }
+        .item-price { font-size: 0.95rem; font-weight: 800; color: #111; white-space: nowrap; }
+        .item-desc { font-size: 0.75rem; color: #444; display: block; margin-top: 0.1rem; line-height: 1.1; }
+
+        .section-header-a4 {
+            background-color: #000000 !important;
+            color: #ffffff !important;
+            -webkit-print-color-adjust: exact !important; /* Força a impressora/PDF a desenhar o fundo preto */
+            print-color-adjust: exact !important;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            text-align: center;
+            padding: 0.2rem 0;
+            margin-bottom: 0.3rem;
+            margin-top: 0.4rem;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 400;
+            font-size: 1.1rem;
+        }
+        
+        .section-header-a4:first-child { margin-top: 0; }
+
+        @media print {
+            @page { size: A4; margin: 0; }
+            body { background: white; padding: 0 !important; margin: 0 !important; }
+            .no-print { display: none !important; }
+            .preview-wrapper { background: white; padding: 0; margin: 0; gap: 0; display: block; min-height: auto; }
+            .a4-canvas {
+                width: 210mm;
+                height: 297mm;
+                margin: 0;
+                padding: 5mm 8mm 8mm 8mm;
+                box-shadow: none;
+                page-break-after: always;
+                page-break-inside: avoid;
+                overflow: hidden;
+            }
+            .a4-canvas:last-of-type, .a4-canvas:last-child { page-break-after: auto; }
+        }
+    </style>
+</head>
+<body class="text-gray-800 font-sans">
+    <div id="app">
+        
+        <!-- Header da App (Escondido na impressão) -->
+        <div class="no-print sticky top-0 z-50 bg-white/95 backdrop-blur shadow-md border-b border-gray-200">
+            <div class="flex justify-between items-center px-2 py-2 md:px-4">
+                
+                <!-- Esquerda: Vistas e Minimizar -->
+                <div class="flex gap-2 items-center">
+                    <div class="flex bg-gray-100 p-1 rounded-lg">
+                        <button @click="currentView = 'edit'" :class="{'bg-white shadow-sm font-bold text-blue-600': currentView === 'edit', 'text-gray-500': currentView !== 'edit'}" class="px-3 py-1.5 md:px-4 md:py-1.5 rounded-md text-sm transition-all flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            <span class="hidden sm:inline">Editor</span>
+                        </button>
+                        <button @click="currentView = 'preview'" :class="{'bg-white shadow-sm font-bold text-emerald-600': currentView === 'preview', 'text-gray-500': currentView !== 'preview'}" class="px-3 py-1.5 md:px-4 md:py-1.5 rounded-md text-sm transition-all flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            <span class="hidden sm:inline">A4</span>
+                        </button>
+                    </div>
+                    
+                    <button v-if="currentView === 'edit'" @click="toggleAll" class="text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 p-2 rounded-lg transition-colors items-center justify-center shrink-0" :title="allCollapsed ? 'Expandir Tudo' : 'Minimizar Tudo'">
+                        <svg class="w-4 h-4 transition-transform duration-300" :class="{'rotate-180': allCollapsed}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                    </button>
+                </div>
+                
+                <!-- Direita: Ações Rápidas (Mesma Linha) -->
+                <div class="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                    <template v-if="currentView === 'edit'">
+                        <label class="bg-gray-100 border border-gray-300 text-gray-700 p-2 md:px-3 md:py-1.5 rounded-lg font-bold shadow-sm hover:bg-gray-200 cursor-pointer transition-colors flex items-center justify-center shrink-0" title="Importar JSON">
+                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            <span class="hidden md:block ml-1 text-xs">Importar</span>
+                            <input type="file" accept=".json" @change="importData" class="hidden">
+                        </label>
+                        <button @click="exportData" class="bg-blue-600 border border-blue-700 text-white p-2 md:px-3 md:py-1.5 rounded-lg font-bold shadow-sm hover:bg-blue-700 transition-colors flex items-center justify-center shrink-0" title="Exportar JSON">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            <span class="hidden md:block ml-1 text-xs">Exportar</span>
+                        </button>
+                        <!-- Botão Guardar em formato Disquete -->
+                        <button @click="saveDataLocal" class="bg-emerald-600 border border-emerald-700 text-white p-2 rounded-lg shadow-sm hover:bg-emerald-700 transition-transform hover:scale-105 flex items-center justify-center shrink-0" title="Guardar Alterações">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                        </button>
+                    </template>
+
+                    <template v-if="currentView === 'preview'">
+                        <button onclick="window.print()" class="bg-gray-900 border border-gray-900 text-white p-2 md:px-4 md:py-1.5 rounded-lg font-bold shadow-sm hover:bg-black transition-colors flex items-center justify-center shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                            <span class="ml-1 text-xs sm:text-sm">Imprimir PDF</span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODAIS NATIVOS DA APP -->
+        <!-- ========================================== -->
+        <transition name="fade">
+            <div v-if="confirmModal.isOpen" class="no-print fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100">
+                    <div class="p-5">
+                        <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                            Atenção
+                        </h3>
+                        <p class="text-sm text-gray-600">{{ confirmModal.message }}</p>
+                    </div>
+                    <div class="bg-gray-50 px-5 py-3 flex justify-end gap-2 border-t border-gray-100">
+                        <button @click="closeConfirm" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancelar</button>
+                        <button @click="executeConfirm" class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-red-700 rounded-lg hover:bg-red-700 transition-colors">Remover</button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- Toast de Notificação -->
+        <transition name="fade">
+            <div v-if="saveStatus" class="no-print fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl z-[150] font-medium text-sm text-center flex items-center gap-2 w-max max-w-[90vw]">
+                <span class="truncate">{{ saveStatus }}</span>
+            </div>
+        </transition>
+
+        <!-- ========================================== -->
+        <!-- MODO: EDITOR WYSIWYG (Parecido com A4) -->
+        <!-- ========================================== -->
+        <div v-show="currentView === 'edit'" class="p-2 md:p-6 max-w-[210mm] mx-auto space-y-6 pb-24">
+            
+            <div v-for="(page, pIndex) in wineData" :key="'page'+pIndex" class="bg-white p-3 md:p-8 rounded-none md:rounded-lg shadow-md border border-gray-300">
+                
+                <!-- Controlos da Página -->
+                <div class="flex justify-between items-center border-b-2 border-gray-200 pb-3 mb-6" :class="{'border-b-0 mb-0 pb-0': page._collapsed}">
+                    <div class="flex items-center gap-3 cursor-pointer group select-none flex-1" @click="toggleCollapse(page)">
+                        <button class="p-1.5 bg-gray-100 rounded-lg text-gray-500 group-hover:bg-gray-200">
+                            <svg class="w-5 h-5 transition-transform duration-200" :class="{'rotate-180': page._collapsed}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <!-- Título com fonte standard (sans) -->
+                        <h2 class="text-xl md:text-2xl font-sans font-black tracking-wide text-gray-800">Página {{ pIndex + 1 }}</h2>
+                    </div>
+                    <div class="flex gap-1 shrink-0">
+                        <button @click.stop="moveUp(wineData, pIndex)" class="p-2 bg-gray-50 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg></button>
+                        <button @click.stop="moveDown(wineData, pIndex)" class="p-2 bg-gray-50 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button>
+                        <button @click.stop="deleteItem(wineData, pIndex, 'página inteira')" class="p-2 bg-red-50 text-red-600 border border-red-100 rounded-lg ml-1 hover:bg-red-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                    </div>
+                </div>
+
+                <div v-show="!page._collapsed" class="space-y-6">
+                    <div v-for="(region, rIndex) in page.regions" :key="'reg'+pIndex+rIndex" class="relative group/region">
+                        
+                        <!-- Cabeçalho da Região (WYSIWYG) -->
+                        <div class="flex flex-col sm:flex-row gap-2" :class="{'mb-4': !region._collapsed}">
+                            <div class="flex items-center gap-1 w-full bg-black px-2 py-1 shadow-sm">
+                                <button @click="toggleCollapse(region)" class="p-1 text-gray-400 hover:text-white shrink-0">
+                                    <svg class="w-5 h-5 transition-transform duration-200" :class="{'rotate-180': region._collapsed}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <input v-model="region.title" class="bg-transparent text-white font-header text-lg uppercase tracking-[0.15em] text-center w-full outline-none placeholder-gray-600" placeholder="NOME DA REGIÃO (EX: DOURO)">
+                            </div>
+                            
+                            <!-- Controlos da Região -->
+                            <div class="flex gap-1 justify-end shrink-0 sm:absolute sm:-right-12 sm:top-0 opacity-100 sm:opacity-0 sm:group-hover/region:opacity-100 transition-opacity">
+                                <button @click="moveUp(page.regions, rIndex)" class="p-1.5 bg-gray-100 border border-gray-200 rounded text-gray-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg></button>
+                                <button @click="moveDown(page.regions, rIndex)" class="p-1.5 bg-gray-100 border border-gray-200 rounded text-gray-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button>
+                                <button @click="deleteItem(page.regions, rIndex, 'região')" class="p-1.5 bg-red-50 border border-red-200 text-red-500 rounded"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                            </div>
+                        </div>
+
+                        <!-- Grid das Categorias idêntico ao A4 -->
+                        <div v-show="!region._collapsed" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 pt-2 px-2">
+                            <div v-for="(cat, cIndex) in region.categories" :key="'cat'+pIndex+rIndex+cIndex" class="flex flex-col relative group/cat">
+                                
+                                <!-- Título da Categoria -->
+                                <div class="flex items-center w-full mb-3 border-b border-gray-300 pb-1">
+                                    <button @click="toggleCollapse(cat)" class="p-1 text-gray-400 hover:text-gray-800 shrink-0">
+                                        <svg class="w-4 h-4 transition-transform duration-200" :class="{'rotate-180': cat._collapsed}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </button>
+                                    <input v-model="cat.type" class="font-header text-[0.95rem] text-gray-800 uppercase tracking-widest font-medium text-center w-full outline-none bg-transparent placeholder-gray-300" placeholder="CATEGORIA">
+                                    <button @click="deleteItem(region.categories, cIndex, 'categoria')" class="p-1 text-red-300 hover:text-red-500 shrink-0 opacity-100 sm:opacity-0 group-hover/cat:opacity-100 transition-opacity"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                                </div>
+
+                                <div v-show="!cat._collapsed" class="flex-1 flex flex-col space-y-1">
+                                    
+                                    <!-- Itens de Vinho -->
+                                    <div v-for="(item, iIndex) in cat.items" :key="'item'+pIndex+rIndex+cIndex+iIndex" class="group/item flex gap-2 items-start p-1.5 -mx-1.5 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors">
+                                        
+                                        <div class="flex-1 flex flex-col min-w-0">
+                                            <div class="flex justify-between items-baseline gap-2">
+                                                <input v-model="item.name" class="font-medium text-[0.95rem] text-gray-900 outline-none w-full bg-transparent placeholder-gray-300 truncate border-b border-transparent focus:border-gray-300" placeholder="Nome do Vinho">
+                                                <input v-model="item.price" @blur="formatPrice(item)" class="font-extrabold text-[0.95rem] text-right text-gray-900 outline-none bg-transparent w-16 placeholder-gray-300 border-b border-transparent focus:border-gray-300 shrink-0" placeholder="22 €">
+                                            </div>
+                                            <input v-model="item.desc" class="text-[0.75rem] text-gray-500 outline-none w-full bg-transparent placeholder-gray-300 truncate border-b border-transparent focus:border-gray-300 mt-[1px]" placeholder="Castas / Descrição">
+                                        </div>
+
+                                        <div class="flex flex-col items-center justify-between opacity-100 sm:opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0 border-l border-gray-200 pl-1">
+                                            <button @click="moveUp(cat.items, iIndex)" class="p-0.5 text-gray-400 hover:text-gray-700"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 15l7-7 7 7"></path></svg></button>
+                                            <button @click="deleteItem(cat.items, iIndex, 'vinho')" class="p-0.5 text-red-300 hover:text-red-500"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                                            <button @click="moveDown(cat.items, iIndex)" class="p-0.5 text-gray-400 hover:text-gray-700"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path></svg></button>
+                                        </div>
+                                    </div>
+                                    
+                                    <button @click="addItem(cat)" class="mt-2 w-full text-blue-500 hover:text-blue-700 hover:bg-blue-50 transition-colors py-1.5 rounded text-[0.75rem] font-bold uppercase tracking-wider border border-dashed border-gray-200">+ Vinho</button>
+                                </div>
+                            </div>
+                            
+                            <div v-show="!region._collapsed" class="flex flex-col items-center justify-center border border-dashed border-gray-300 rounded p-2 cursor-pointer text-gray-400 hover:text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors min-h-[80px]" @click="addCategory(region)">
+                                <span class="font-bold text-xs uppercase tracking-wider">+ Categoria</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button @click="addRegion(page)" class="bg-gray-50 hover:bg-gray-100 transition-colors text-gray-600 px-4 py-3 rounded-lg w-full font-bold border border-gray-200 text-sm uppercase tracking-wider mt-4">
+                        + Nova Região
+                    </button>
+                </div>
+            </div>
+
+            <button @click="addPage" class="bg-white border border-dashed border-gray-400 hover:bg-gray-50 transition-colors text-gray-500 px-6 py-6 rounded-lg w-full font-bold text-lg uppercase tracking-wider shadow-sm">
+                + Adicionar Nova Folha A4
+            </button>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODO: PREVIEW A4 / IMPRESSÃO -->
+        <!-- ========================================== -->
+        <div v-show="currentView === 'preview'" class="preview-wrapper">
+            <div v-for="(page, pIndex) in wineData" :key="'print'+pIndex" class="a4-canvas">
+                
+                <header class="flex justify-between items-center mb-1 mt-0 relative pb-1">
+                    <div class="flex flex-col items-center w-full ml-12">
+                        <h1 class="font-gothic text-[3.8rem] text-gray-800 tracking-wide text-center leading-none" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">
+                            Solar D Manuel I
+                        </h1>
+                        <h2 class="font-header text-lg text-gray-500 tracking-[0.25em] mt-1 uppercase text-center leading-none">
+                            Carta de Vinhos | Wine List
+                        </h2>
+                    </div>
+                    <div class="w-20 h-20 mr-2 relative opacity-80 shrink-0 -mt-6" style="transform: rotate(0deg);">
+                        <img src="./logo-icon.png" onerror="this.style.display='none'" alt="Logo" class="w-full h-full object-contain">
+                    </div>
+                </header>
+
+                <template v-for="region in page.regions">
+                    <div v-if="region.title" class="section-header-a4">{{ region.title }}</div>
+                    
+                    <div class="grid grid-cols-3 gap-x-6 mb-2">
+                        <div v-for="cat in region.categories" class="col-span-1">
+                            <div v-if="cat.items && cat.items.length > 0">
+                                <div class="font-header text-[0.95rem] mt-0 mb-2 text-gray-800 uppercase tracking-widest font-medium border-b border-gray-200 pb-0.5 text-center">
+                                    {{ cat.type }}
+                                </div>
+                                
+                                <div v-for="item in cat.items" class="menu-item-row">
+                                    <div>
+                                        <span class="item-name block">{{ item.name }}</span>
+                                        <span v-if="item.desc" class="item-desc">{{ item.desc }}</span>
+                                    </div>
+                                    <span class="item-price">{{ item.price && !String(item.price).includes('€') ? item.price + ' €' : item.price }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const wineData = ref([]);
+                const saveStatus = ref('');
+                const allCollapsed = ref(true);
+                const currentView = ref('edit');
+                
+                // Variáveis reativas do Modal Customizado
+                const confirmModal = ref({
+                    isOpen: false,
+                    message: '',
+                    onConfirm: null
+                });
+
+                onMounted(() => {
+                    const localData = localStorage.getItem('wineDataApp');
+                    if (localData) {
+                        wineData.value = JSON.parse(localData);
+                    } else {
+                        wineData.value = [{ regions: [{ title: '', categories: [] }] }];
+                    }
+                });
+
+                const showToast = (message) => {
+                    saveStatus.value = message;
+                    setTimeout(() => saveStatus.value = '', 3000);
+                };
+
+                // Lógica do Modal Customizado
+                const openConfirm = (message, callback) => {
+                    confirmModal.value = { isOpen: true, message, onConfirm: callback };
+                };
+
+                const closeConfirm = () => {
+                    confirmModal.value.isOpen = false;
+                    setTimeout(() => confirmModal.value.onConfirm = null, 300); // Aguarda animação terminar
+                };
+
+                const executeConfirm = () => {
+                    if (confirmModal.value.onConfirm) {
+                        confirmModal.value.onConfirm();
+                    }
+                    closeConfirm();
+                };
+
+                const toggleCollapse = (item) => { item._collapsed = !item._collapsed; };
+
+                const toggleAll = () => {
+                    allCollapsed.value = !allCollapsed.value;
+                    const state = allCollapsed.value;
+                    wineData.value.forEach(page => {
+                        page._collapsed = state;
+                        if (page.regions) {
+                            page.regions.forEach(region => {
+                                region._collapsed = state;
+                                if (region.categories) {
+                                    region.categories.forEach(cat => cat._collapsed = state);
+                                }
+                            });
+                        }
+                    });
+                };
+
+                const getCleanData = () => {
+                    return JSON.parse(JSON.stringify(wineData.value, (key, value) => {
+                        if (key === '_collapsed') return undefined;
+                        return value;
+                    }));
+                };
+
+                const moveUp = (arr, index) => { if (index > 0) { const item = arr.splice(index, 1)[0]; arr.splice(index - 1, 0, item); } };
+                const moveDown = (arr, index) => { if (index < arr.length - 1) { const item = arr.splice(index, 1)[0]; arr.splice(index + 1, 0, item); } };
+
+                // Substituição do Alert Nativo
+                const deleteItem = (arr, index, label) => {
+                    openConfirm(`Tem a certeza que deseja remover esta ${label}?`, () => {
+                        arr.splice(index, 1);
+                        showToast(`${label.charAt(0).toUpperCase() + label.slice(1)} removida com sucesso!`);
+                    });
+                };
+
+                const addPage = () => { wineData.value.push({ regions: [], _collapsed: false }); };
+                const addRegion = (page) => { page._collapsed = false; page.regions.push({ title: '', categories: [], _collapsed: false }); };
+                const addCategory = (region) => { region._collapsed = false; region.categories.push({ type: '', items: [], _collapsed: false }); };
+                const addItem = (category) => { category._collapsed = false; category.items.push({ name: '', price: '', desc: '' }); };
+
+                const formatPrice = (item) => {
+                    if (item.price && !String(item.price).includes('€')) {
+                        item.price = String(item.price).trim() + ' €';
+                    }
+                };
+
+                const saveDataLocal = () => {
+                    localStorage.setItem('wineDataApp', JSON.stringify(getCleanData()));
+                    showToast('Guardado com sucesso!');
+                };
+
+                const exportData = () => {
+                    const dataStr = JSON.stringify(getCleanData(), null, 2);
+                    const blob = new Blob([dataStr], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = "wine_data.json";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast('Descarregado JSON!');
+                };
+
+                const importData = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const parsed = JSON.parse(e.target.result);
+                            wineData.value = parsed;
+                            localStorage.setItem('wineDataApp', JSON.stringify(parsed));
+                            allCollapsed.value = false;
+                            toggleAll(); 
+                            showToast('Importado com Sucesso!');
+                        } catch (err) {
+                            // Substituição do Alert Nativo de erro
+                            showToast("Erro: O formato do ficheiro é inválido.");
+                        }
+                    };
+                    reader.readAsText(file);
+                    event.target.value = ''; 
+                };
+
+                return {
+                    wineData, saveStatus, allCollapsed, currentView, confirmModal,
+                    closeConfirm, executeConfirm,
+                    toggleCollapse, toggleAll, moveUp, moveDown, deleteItem,
+                    addPage, addRegion, addCategory, addItem, formatPrice,
+                    saveDataLocal, exportData, importData
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
