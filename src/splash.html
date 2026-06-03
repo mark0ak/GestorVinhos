@@ -3,9 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <style>
+        /* Carrega a sua fonte gótica local */
+        @font-face {
+            font-family: 'CloisterBlack';
+            src: local('CloisterBlack'), url('./CloisterBlack.ttf') format('truetype');
+            font-display: swap;
+        }
+
         body {
             margin: 0;
-            background-color: #111827; /* Fundo escuro */
+            background-color: #111827; /* Fundo Escuro */
             color: #f3f4f6;
             display: flex;
             flex-direction: column;
@@ -14,39 +21,115 @@
             height: 100vh;
             font-family: 'Segoe UI', system-ui, sans-serif;
             overflow: hidden;
-            /* Evita que o utilizador selecione o texto enquanto espera */
-            user-select: none; 
+            user-select: none;
         }
-        .spinner {
-            width: 45px;
-            height: 45px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #10b981; /* Verde esmeralda da sua app */
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+
+        .logo-container {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        @keyframes spin { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
+
+        .logo-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            opacity: 0.9;
         }
-        h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            margin: 0;
+
+        h1 {
+            font-family: 'CloisterBlack', cursive, serif;
+            font-size: 3rem;
+            color: #ffffff;
+            margin: 0 0 30px 0;
+            font-weight: normal;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: 2px;
+            text-align: center;
         }
-        p {
-            font-size: 0.8rem;
+
+        /* Barra de Progresso */
+        .progress-container {
+            width: 250px;
+            height: 6px;
+            background-color: #374151; /* Cinzento Escuro da calha */
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #10b981; /* Verde Esmeralda */
+            width: 0%;
+            /* Animação cravada em 10 segundos exatos */
+            animation: fillProgress 10s linear forwards; 
+        }
+
+        @keyframes fillProgress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        /* Texto Dinâmico de Estado */
+        .status-text {
+            font-size: 0.85rem;
             color: #9ca3af;
-            margin-top: 8px;
+            margin-top: 15px;
+            min-height: 20px; /* Impede salto no layout quando o texto muda */
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .extra-time {
+            color: #ef4444; /* Vermelho suave para indicar atraso */
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <div class="spinner"></div>
-    <h2>Solar D Manuel I</h2>
-    <p>A organizar a adega...</p>
+
+    <!-- Logótipo -->
+    <div class="logo-container">
+        <img src="./logo-icon.png" onerror="this.style.display='none'" alt="Logo">
+    </div>
+
+    <!-- Título com Fonte Personalizada -->
+    <h1>Solar Dom Manuel I</h1>
+
+    <!-- Barra de Progresso de 10s -->
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Mensagem e Contador Extra -->
+    <div class="status-text" id="statusText">A organizar a adega...</div>
+
+    <script>
+        const statusText = document.getElementById('statusText');
+        const startTime = Date.now();
+        const TARGET_SECONDS = 10;
+
+        // Ouve o final da animação CSS (exatamente 10 segundos depois)
+        document.getElementById('progressBar').addEventListener('animationend', () => {
+            // Se a animação acabou e a janela ainda não foi fechada pelo Tauri (index.html),
+            // inicia o contador de tempo extra.
+            statusText.innerHTML = `Quase pronto... <span class="extra-time"></span>`;
+            const extraTimeSpan = statusText.querySelector('.extra-time');
+            
+            setInterval(() => {
+                const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+                const extraSeconds = elapsedSeconds - TARGET_SECONDS;
+                
+                if (extraSeconds > 0) {
+                    extraTimeSpan.innerText = `+ ${extraSeconds}s`;
+                }
+            }, 1000); // Atualiza de 1 em 1 segundo
+        });
+    </script>
 </body>
 </html>
