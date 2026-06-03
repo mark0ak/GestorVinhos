@@ -10,9 +10,23 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "gestorvinhos",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "Solar D Manuel I - Gestor de Vinhos",
+        "width": 1024,
+        "height": 768,
+        "visible": false
+      },
+      {
+        "label": "splashscreen",
+        "title": "Carregando...",
+        "url": "splash.html",
+        "width": 400,
+        "height": 300,
+        "decorations": false,
+        "center": true,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
       }
     ],
     "security": {
