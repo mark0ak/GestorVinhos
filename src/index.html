@@ -361,14 +361,36 @@
                     onConfirm: null
                 });
 
-                onMounted(() => {
+                                onMounted(() => {
                     const localData = localStorage.getItem('wineDataApp');
                     if (localData) {
                         wineData.value = JSON.parse(localData);
                     } else {
                         wineData.value = [{ regions: [{ title: '', categories: [] }] }];
                     }
+
+                    // Lógica do Splash Screen para Tauri v2
+                    if (window.__TAURI__ && window.__TAURI__.window) {
+                        setTimeout(async () => {
+                            try {
+                                const { getCurrentWindow, getAllWindows } = window.__TAURI__.window;
+                                
+                                // Mostra a janela principal suavemente
+                                await getCurrentWindow().show();
+                                
+                                // Procura e fecha o pequeno loader do ecrã
+                                const windows = await getAllWindows();
+                                const splash = windows.find(w => w.label === 'splashscreen');
+                                if (splash) {
+                                    await splash.close();
+                                }
+                            } catch (error) {
+                                console.error("Erro no carregamento das janelas:", error);
+                            }
+                        }, 500); // Aguarda meio segundo para evitar solavancos visuais
+                    }
                 });
+
 
                 const showToast = (message) => {
                     saveStatus.value = message;
